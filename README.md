@@ -7,6 +7,7 @@ The code has been tested only on Ubuntu distributions, but should work also on W
 
 # Installation
 Here we describe the packages used by the script.
+The script uses python 3.
 
 # Robot set up
 Here we describe the setup.
