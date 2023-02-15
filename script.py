@@ -4,13 +4,14 @@ import signal, sys
 from math import pi
 import numpy as np
 import rtde_control
+import rtde_receive
 from threading import Thread, Lock
 
 
 #Robot parameters
 ROBOT_ADDRESS = "192.168.0.10"
-JOINT_VELOCITY     = 1.6
-JOINT_ACCELERATION = 1
+JOINT_VELOCITY     = 2
+JOINT_ACCELERATION = 1.5
 
 #Home configuration
 HOME = [0, -pi/2, 0, -pi/2, 0, 0]
@@ -23,7 +24,20 @@ C  = np.array(( [1.0472, -1.2833, -0.7376, -2.6915, -1.5708,  3.1416],
                 [2.7686, -1.5522,  0.5236,  2.5994, -1.5708,  1.4202],
                 [2.7686, -1.1475, -0.7376,  0.3143,  1.5708, -1.7214],
                 [2.7686, -1.8583,  0.7376, -0.4501,  1.5708, -1.7214]))
+#Singular configuration
+Q_SINGULAR1 = [1.6067, -1.1981, 0.0000, 5.3731, 1.3489, -4.6411]
+Q_SINGULAR2 = [-1.0093, -2.3176, 0.0000, 5.3732, -4.9342, 4.0461]
+Q_SINGULAR3 = [1.8014, -1.9925, -0.0000, -4.7123, 0.0001, 4.7632]
+Q_SINGULAR4 = [1.6008, -1.5708, 0.0000, -5.3424, 4.2970, 5.0001]
+Q_SINGULAR5 = [1.0106, -1.1150, -0.0000, -0.9100, 1.3488, -3.9721]
 
+Q_SINGULAR  = np.array(( 
+    [1.4698,   -0.5097,   -0.3219,    0.8790,    1.0712],
+    [-1.9925,   -1.5971,   -1.6335,   -1.5708,   -0.9331],
+    [0.0000,   -0.1456,   -0.0433,   -0.0000,   -0.0000],
+    [2.2316,   -0.0011,   -0.4386,   -1.1793,   -0.9100],
+    [1.7926,   -3.1361,   -0.0000,    0.5445,    1.3490],
+    [-1.4991,   -0.1887,    0.2001,    0.4285,   -1.9221]))
 
 #Variables used for the display
 ROW_ITERATOR = (count(start = 0, step = 1))
@@ -55,6 +69,7 @@ def initTerminal(stdsrc):
     stdsrc.addstr(next(ROW_ITERATOR), 0, "s) To see a singular configuration of the robot;")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "m) To control the end effector position with the keyboard keys;")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "t) Teach mode.")
+    stdsrc.addstr(next(ROW_ITERATOR), 0, "h) Home the robot.")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "q) Exit the program.")
 
     #Display the joint values
@@ -79,13 +94,25 @@ def inverseKinematicsExample(stdsrc, rtde_c, stopTask):
             rtde_c.moveJ(C[i, :], JOINT_VELOCITY, JOINT_ACCELERATION)
 
 #Move the robot in a singular configuration
-def singularConfigurationExample(stdsrc, rtde_c, stopTask):
+def singularConfigurationExample(stdsrc, rtde_c, rtde_r, stopTask):
+    VEL = 1
+    ACC = 0.8
+    IN_SINGULARITY = False
+    stdsrc.addstr(0, 0, "Moving in singularities...")
+    stdsrc.refresh()
     while True:
         if stopTask():
+            if IN_SINGULARITY is True:
+                rtde_c.reconnect()
             return
-        stdsrc.addstr(0, 0, "Moving in singularities...")
-        stdsrc.refresh()
-
+        if IN_SINGULARITY is False:
+            IN_SINGULARITY = True
+            rtde_c.moveJ(Q_SINGULAR[:, 1], VEL, ACC)
+            stdsrc.addstr(0, 0, "Setting teach mode...")
+            stdsrc.refresh()
+            rtde_c.disconnect()
+            stdsrc.addstr(0, 0, "Teach mode: OK")
+            stdsrc.refresh()
 
 #Handle interruption or kill to close the communication with the robot
 def killHandler(signum, frame):
@@ -102,6 +129,8 @@ def main(stdsrc):
 
     #Connect to the robot
     rtde_c = rtde_control.RTDEControlInterface(ROBOT_ADDRESS)
+    rtde_r = rtde_receive.RTDEReceiveInterface(ROBOT_ADDRESS)
+
     #Move the robot in the home configuration
     rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
 
@@ -125,7 +154,7 @@ def main(stdsrc):
             p = Thread(target=inverseKinematicsExample, args=(stdsrc, rtde_c, lambda: stopTask, ))
         elif c == ord('s'):
             stdsrc.addstr(0, 0, "See a singular configuration")
-            p = None
+            p = Thread(target=singularConfigurationExample, args=(stdsrc, rtde_c, rtde_r, lambda: stopTask, ))
         elif c == ord('m'):
             stdsrc.addstr(0, 0, "Control the EE position")
             p = None
@@ -133,10 +162,13 @@ def main(stdsrc):
             stdsrc.addstr(0, 0, "Teach mode...")
             rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
             p = None
+        elif c == ord('h'):
+            rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
+            p = None
         elif c == ord('q'):
             stdsrc.addstr(0, 0, "Move home and exit the program")
             stdsrc.refresh()
-            rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
+            #rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
             rtde_c.disconnect()
             p = None
             break
