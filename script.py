@@ -10,8 +10,8 @@ from threading import Thread, Lock
 
 #Robot parameters
 ROBOT_ADDRESS = "192.168.0.10"
-JOINT_VELOCITY     = 2
-JOINT_ACCELERATION = 1.5
+JOINT_VELOCITY     = 3
+JOINT_ACCELERATION = 2
 
 #Home configuration
 HOME = [0, -pi/2, 0, -pi/2, 0, 0]
@@ -41,6 +41,7 @@ Q_SINGULAR  = np.array((
 
 #Variables used for the display
 ROW_ITERATOR = (count(start = 0, step = 1))
+CURRENT_ITERATOR = 0
 
 #Initialize the terminal
 def initTerminal(stdsrc):
@@ -70,13 +71,14 @@ def initTerminal(stdsrc):
     stdsrc.addstr(next(ROW_ITERATOR), 0, "m) To control the end effector position with the keyboard keys;")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "t) Teach mode.")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "h) Home the robot.")
+    stdsrc.addstr(next(ROW_ITERATOR), 0, "c) Bring the robot in a Cartesian position.")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "q) Exit the program.")
 
     #Display the joint values
     stdsrc.addstr(next(ROW_ITERATOR), 0, "********************")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "*Joint angles [rad]*")
     stdsrc.addstr(next(ROW_ITERATOR), 0, "********************")
-
+    stdsrc.addstr(next(ROW_ITERATOR), 0, "")
     #Update the interface
     stdsrc.refresh()
 
@@ -98,7 +100,8 @@ def singularConfigurationExample(stdsrc, rtde_c, rtde_r, stopTask):
     VEL = 1
     ACC = 0.8
     IN_SINGULARITY = False
-    stdsrc.addstr(0, 0, "Moving in singularities...")
+    stdsrc.deleteln()
+    stdsrc.addstr(CURRENT_ITERATOR, 0, "Moving in singularities...")
     stdsrc.refresh()
     while True:
         if stopTask():
@@ -107,12 +110,61 @@ def singularConfigurationExample(stdsrc, rtde_c, rtde_r, stopTask):
             return
         if IN_SINGULARITY is False:
             IN_SINGULARITY = True
-            rtde_c.moveJ(Q_SINGULAR[:, 1], VEL, ACC)
-            stdsrc.addstr(0, 0, "Setting teach mode...")
+            rtde_c.moveJ(Q_SINGULAR[:, 1], JOINT_VELOCITY, JOINT_ACCELERATION)
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Setting teach mode...")
             stdsrc.refresh()
             rtde_c.disconnect()
-            stdsrc.addstr(0, 0, "Teach mode: OK")
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Teach mode: OK")
             stdsrc.refresh()
+
+#Move the robot in a singular configuration
+def home(stdsrc, rtde_c, rtde_r, stopTask):
+    IN_HOME = False
+    stdsrc.deleteln()
+    stdsrc.addstr(CURRENT_ITERATOR, 0, "Moving in home...")
+    stdsrc.refresh()
+    while True:
+        if stopTask():
+            if IN_HOME is True:
+                rtde_c.reconnect()
+            return
+        if IN_HOME is False:
+            IN_HOME = True
+            rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Setting teach mode...")
+            stdsrc.refresh()
+            rtde_c.disconnect()
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Teach mode: OK")
+            stdsrc.refresh()
+
+#Move the robot in a singular configuration
+def cartesianExample(stdsrc, rtde_c, rtde_r, stopTask):
+    IN_POSITION = False
+    stdsrc.deleteln()
+    stdsrc.addstr(CURRENT_ITERATOR, 0, "Moving in position...")
+    stdsrc.refresh()
+    while True:
+        if stopTask():
+            if IN_POSITION is True:
+                rtde_c.reconnect()
+            return
+        if IN_POSITION is False:
+            IN_POSITION = True
+            rtde_c.moveJ([0, -pi/4, pi/4, 0, 0, 0], JOINT_VELOCITY, JOINT_ACCELERATION)
+            rtde_c.moveL([-0.143, -0.435, 0.20, -0.001, 3.12, 0.04], 0.5, 0.3)
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Setting teach mode...")
+            stdsrc.refresh()
+            rtde_c.disconnect()
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Teach mode: OK")
+            stdsrc.refresh()
+
+
 
 #Handle interruption or kill to close the communication with the robot
 def killHandler(signum, frame):
@@ -126,6 +178,9 @@ def killHandler(signum, frame):
 def main(stdsrc):
     #Initialize the interface
     initTerminal(stdsrc)
+    #Store the last position of the iterator for future use
+    global CURRENT_ITERATOR
+    CURRENT_ITERATOR = next(ROW_ITERATOR)
 
     #Connect to the robot
     rtde_c = rtde_control.RTDEControlInterface(ROBOT_ADDRESS)
@@ -150,23 +205,29 @@ def main(stdsrc):
                 stopTask = False
         #Process the user input
         if c == ord('i'):
-            stdsrc.addstr(0, 0, "Move the robot in the IK")
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Move the robot in the IK")
             p = Thread(target=inverseKinematicsExample, args=(stdsrc, rtde_c, lambda: stopTask, ))
         elif c == ord('s'):
-            stdsrc.addstr(0, 0, "See a singular configuration")
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "See a singular configuration")
             p = Thread(target=singularConfigurationExample, args=(stdsrc, rtde_c, rtde_r, lambda: stopTask, ))
         elif c == ord('m'):
-            stdsrc.addstr(0, 0, "Control the EE position")
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Control the EE position")
             p = None
         elif c == ord('t'):
-            stdsrc.addstr(0, 0, "Teach mode...")
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Teach mode...")
             rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
             p = None
         elif c == ord('h'):
-            rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
-            p = None
+            p = Thread(target=home, args=(stdsrc, rtde_c, rtde_r, lambda: stopTask, ))
+        elif c == ord('c'):
+            p = Thread(target=cartesianExample, args=(stdsrc, rtde_c, rtde_r, lambda: stopTask, ))
         elif c == ord('q'):
-            stdsrc.addstr(0, 0, "Move home and exit the program")
+            stdsrc.deleteln()
+            stdsrc.addstr(CURRENT_ITERATOR, 0, "Move home and exit the program")
             stdsrc.refresh()
             #rtde_c.moveJ(HOME, JOINT_VELOCITY, JOINT_ACCELERATION)
             rtde_c.disconnect()
