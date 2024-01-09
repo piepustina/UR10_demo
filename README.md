@@ -11,7 +11,7 @@ pip3 install ur_rtde
 ```
 
 # Setup
-Connect the PC running the code with the UR robot through the ethernet cable. Make sure to assign to the PC a **static IP** address on the same subnet of the robot. The default robot subnet and address are, respectively, 
+Connect the PC running the code with the UR robot through the ethernet cable. Make sure to assign to the PC a **static IP** address on the same subnet of the robot. The default subnet and address are, respectively, 
 ```
 192.168.0.0/24
 ```
